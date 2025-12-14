@@ -174,6 +174,13 @@ if(BUILD_STATIC_LIBS)
   target_include_directories(${LIB_STATIC} INTERFACE
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
+	
+  if (EMSCRIPTEN)
+	target_compile_options(
+		 ${LIB_STATIC} PRIVATE
+		-pthread
+	)
+  endif()
 endif()
 
 if(BUILD_SHARED_LIBS)
