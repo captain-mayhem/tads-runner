@@ -28,7 +28,7 @@ Passing `-DEMSCRIPTEN=...` (or configuring with the Emscripten toolchain) enable
 
 ### Sibling `htmltads` directory
 
-If a `../htmltads` directory exists next to this repo (see `tads-runner.code-workspace`, which opens both as one VS Code workspace), CMake auto-detects it and, on Windows or Emscripten only, sets `WITH_HTMLTADS=ON` and builds it as a subdirectory, enabling the HTML TADS targets (`t3htm`, `t3htm_d`) in `tads3/CMakeLists.txt`. Without that sibling directory present, HTML TADS targets are skipped entirely.
+If a `../htmltads` directory exists next to this repo (see `tads-runner.code-workspace`, which opens both as one VS Code workspace), CMake auto-detects it and sets `WITH_HTMLTADS=ON` on every platform, building it as a subdirectory and enabling the HTML TADS targets (`t3htm`, `t3htm_d`) in `tads3/CMakeLists.txt`. Without that sibling directory present, HTML TADS targets are skipped entirely. As of the guit3 migration's M4 milestone, `guit3` (the cross-platform Dear ImGui/GLFW interpreter under `htmltads/htmltads/imgui/`) builds on Linux too, not just Windows/Emscripten — see `htmltads/htmltads/imgui/migration.md` for the platform-gating history and the non-Windows build's known gaps. The other `htmltads/` targets (`htmlt3`, `htmltdb3`, `tadsweb`) remain Windows/Emscripten-only.
 
 `htmltads` is an independent git repository with its own restrictive (non-GPL) license and its own [CLAUDE.md](../htmltads/CLAUDE.md) — read that before working on anything under `htmltads/`. It currently hosts the active `guit3` migration (porting the legacy Win32 `htmlt3` GUI client to cross-platform Dear ImGui/GLFW), whose plan and working notes live in `htmltads/htmltads/imgui/migration.md`.
 
