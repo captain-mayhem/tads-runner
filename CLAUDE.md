@@ -19,12 +19,15 @@ Presets (`CMakePresets.json`):
 - `default` — Ninja, single-config, `build/default`
 - `ninja-multi` — Ninja Multi-Config
 - `windows-only` — inherits `default`, forces the MSVC toolchain file (`toolchain/Windows.MSVC.toolchain.cmake`), only usable on Windows
+- `emscripten` — inherits `default`, sets `CMAKE_TOOLCHAIN_FILE` from `$env{EMSDK}` (activate emsdk first, e.g. `emsdk_env.ps1`/`emsdk_env.sh`, so that's set); see the Emscripten section below
 
 On Windows without a preset, the MSVC toolchain files under `toolchain/` (`Windows.MSVC.toolchain.cmake`, `VSWhere.cmake`, `Windows.Kits.cmake`, `WSL.cmake`) locate Visual Studio/Windows SDK; use the `windows-only` preset rather than hand-configuring these.
 
 ### Emscripten (WASM) builds
 
 Passing `-DEMSCRIPTEN=...` (or configuring with the Emscripten toolchain) enables WASM-specific paths: it pulls in `curl/` as a subdirectory (used for TADS networking support), and packages compiled `.t3` game files into Emscripten `.data`/`.js` blobs via the `em_package` CMake function (see `TadsFunctions.cmake`).
+
+With `WITH_HTMLTADS` on, an Emscripten configure builds **both** the classic `htmltads/emscripten/`-based `htmlt3` web port and `guit3` (the Dear ImGui/GLFW port, see `../htmltads/CLAUDE.md`) — there's no CMake switch between them. This works because `t3htm` (`tads3/CMakeLists.txt`, shared by both) compiles the union of both ports' small OS-glue files rather than forking: they declare non-overlapping symbols, so one static lib can supply both executables. The two ports' generic (GUI-toolkit-agnostic) OS hooks were also literally duplicate headers (`hos_gui.h` vs `hos_emscripten.h`) and are now one shared `htmltads/htmltads/hos_gui.h`, each port still bringing its own `.cpp` implementing it. `guit3` itself has no GLFW/GL/font/audio backend for Emscripten yet and does not build cleanly end-to-end — see `../htmltads/htmltads/imgui/migration.md` §5.6 for the concrete first compile errors and what's left.
 
 ### Sibling `htmltads` directory
 
