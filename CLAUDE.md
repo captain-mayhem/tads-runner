@@ -35,6 +35,8 @@ With `WITH_HTMLTADS` on, an Emscripten configure builds **both** the classic `ht
 
 If a `../htmltads` directory exists next to this repo (see `tads-runner.code-workspace`, which opens both as one VS Code workspace), CMake auto-detects it and, on Windows/Emscripten, sets `WITH_HTMLTADS=ON`, building it as a subdirectory and enabling the HTML TADS targets (`t3htm`, `t3htm_d`) in `tads3/CMakeLists.txt`. `guit3` (the cross-platform Dear ImGui interpreter on Captain's Game Engine) comes only from `../guitads`, which also enables `WITH_HTMLTADS` on Linux. Without either sibling directory present, HTML TADS targets are skipped entirely. The `htmltads/` targets (`htmlt3`, `htmltdb3`, `tadsweb`) remain Windows/Emscripten-only.
 
+`guit3` also builds for Android: the Gradle project `../guitads/guit3/android` (see its README.md) runs this repo's `CMakeLists.txt` with the NDK for the target `guit3` (a shared library there); the Android-specific changes are in `../guitads/guit3/migration.md` §5.34. Two of them are in `tads2/unix/osunixt.h` (`__ANDROID__`, next to the `__EMSCRIPTEN__` cases).
+
 `htmltads` is an independent git repository with its own restrictive (non-GPL) license and its own [CLAUDE.md](../htmltads/CLAUDE.md) — read that before working on anything under `htmltads/`.
 
 ## Testing
