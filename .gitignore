@@ -1,5 +1,11 @@
+CMakeUserPresets.json
+imgui.ini
+tadscrsh.txt
+test.sav
+build/
 tests/build
 tests/regtest.py
 tests/remglk
-CMakeUserPresets.json
-build/
+tests/ditch3.t3v
+tests/mp3test
+server.log
