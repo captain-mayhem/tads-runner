@@ -1,0 +1,79 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this repo is
+
+An open-source fork of the TADS Runner (interpreter/compiler for TADS 2 and TADS 3 interactive fiction), extracted from the [garglk](https://github.com/garglk/garglk) repository under GPL-2.0. The focus is the Glk port (GlkTADS), but changes for non-Glk interpreters are welcome too. This is largely inherited C/C++ code from the original TADS distribution (TADS2, TADS3) plus CMake build plumbing added on top; most `.c`/`.cpp` files under `tads2/` and `tads3/` should be treated as vendored upstream code — prefer minimal, targeted changes over refactors.
+
+## Build system
+
+CMake (>= 3.17), builds with Ninja by default via presets. Key top-level targets, built via `add_subdirectory`, live in `tads2/`, `tads3/`, `glk/`, and `tests/`.
+
+```
+cmake --preset default          # configure (Ninja, build/default)
+cmake --build --preset default  # build
+```
+
+Presets (`CMakePresets.json`):
+- `default` — Ninja, single-config, `build/default`
+- `ninja-multi` — Ninja Multi-Config
+- `windows-only` — inherits `default`, forces the MSVC toolchain file (`toolchain/Windows.MSVC.toolchain.cmake`), only usable on Windows
+- `emscripten` — inherits `default`, sets `CMAKE_TOOLCHAIN_FILE` from `$env{EMSDK}` (activate emsdk first, e.g. `emsdk_env.ps1`/`emsdk_env.sh`, so that's set); see the Emscripten section below
+
+On Windows without a preset, the MSVC toolchain files under `toolchain/` (`Windows.MSVC.toolchain.cmake`, `VSWhere.cmake`, `Windows.Kits.cmake`, `WSL.cmake`) locate Visual Studio/Windows SDK; use the `windows-only` preset rather than hand-configuring these.
+
+### Emscripten (WASM) builds
+
+Passing `-DEMSCRIPTEN=...` (or configuring with the Emscripten toolchain) enables WASM-specific paths: with a `../guitads` checkout it adds that repo's bundled libcurl (`../guitads/curl`, used for TADS networking support; without guitads the network module defaults to off there), and packages compiled `.t3` game files into Emscripten `.data`/`.js` blobs via the `em_package` CMake function (see `TadsFunctions.cmake`).
+
+With `WITH_HTMLTADS` on, an Emscripten configure builds **both** the classic `htmltads/emscripten/`-based `htmlt3` web port and `guit3` (the Dear ImGui port on Captain's Game Engine, from `../guitads`) — there's no CMake switch between them. This works because `t3htm` (`tads3/CMakeLists.txt`, shared by both) compiles the union of both ports' small OS-glue files rather than forking: they declare non-overlapping symbols, so one static lib can supply both executables. The two ports' generic (GUI-toolkit-agnostic) OS hooks were also literally duplicate headers (`hos_gui.h` vs `hos_emscripten.h`) and are now one shared `htmltads/htmltads/hos_gui.h`, each port still bringing its own `.cpp` implementing it. `guit3` builds and runs end-to-end under Emscripten on the engine's threaded web backend (pthreads + ASYNCIFY), including WebUI games through a Service Worker — see its migration notes (`../guitads/guit3/migration.md`, §5.6–5.31).
+
+### Sibling `guitads` / `htmltads` directories
+
+`../guitads` (guit3-only, GPL-clean core) and `../htmltads` (the legacy `htmlt3`/`htmltdb3`/`tadsweb` targets only — `guit3` and its imgui/glfw/freetype/miniaudio deps were removed from it) are both optional and can be checked out in parallel. When both exist, `CMakeLists.txt` adds `guitads` first — it owns `guit3` and the shared 3rd-party libs: libmng is its own, and zlib, libpng, jpeg, freetype, imgui, miniaudio, libogg and libvorbis come from Captain's Game Engine (`../captainsengine`, a third sibling checkout that guitads adds with `add_subdirectory()`, see guitads' CMakeLists.txt), and `HTMLTADS_CORE_DIR`/`GUIT3_APP_DIR` (used by `t3htm`) point into it — then adds `htmltads`, whose CMake files skip any of those targets that already exist (`if (NOT TARGET ...)`) and only add the legacy `htmlt3`/`htmltdb3`/`tadsweb`/Workbench targets. With only `htmltads` present, it is only added on Windows/Emscripten (it has nothing to build elsewhere) and no `guit3` is built.
+
+If a `../htmltads` directory exists next to this repo (see `tads-runner.code-workspace`, which opens both as one VS Code workspace), CMake auto-detects it and, on Windows/Emscripten, sets `WITH_HTMLTADS=ON`, building it as a subdirectory and enabling the HTML TADS targets (`t3htm`, `t3htm_d`) in `tads3/CMakeLists.txt`. `guit3` (the cross-platform Dear ImGui interpreter on Captain's Game Engine) comes only from `../guitads`, which also enables `WITH_HTMLTADS` on Linux. Without either sibling directory present, HTML TADS targets are skipped entirely. The `htmltads/` targets (`htmlt3`, `htmltdb3`, `tadsweb`) remain Windows/Emscripten-only.
+
+`guit3` also builds for Android: the Gradle project `../guitads/guit3/android` (see its README.md) runs this repo's `CMakeLists.txt` with the NDK for the target `guit3` (a shared library there); the Android-specific changes are in `../guitads/guit3/migration.md` §5.34. Two of them are in `tads2/unix/osunixt.h` (`__ANDROID__`, next to the `__EMSCRIPTEN__` cases). Android builds guitads' bundled `../guitads/curl` too (so the network module is on, for WebUI games), and guit3 there relies on `oss_set_net_wait_hook()` (`osifcnet.h`, `tads3/unix/osnetunix.h`: network waits on the host's UI thread poll and call the host) and on `os_get_tmp_path()` honouring `$TMPDIR` (`tads2/unix/osunixt.c`).
+
+`guit3` links its own copy of the built-in function set registry, `../guitads/guit3/vmbifreg_guit3.cpp` (the `tads3/vmbifregxn.cpp`/`vmbifregx.cpp` list plus `bodgers/002`, the function set of the game *Thaumistry*'s front end, with its map screen — see `../guitads/guit3/migration.md` §5.37). It replaces `t3htm`'s registry at link time, so a function set added to `tads3/vmbifregxn.cpp` must be added there too.
+
+Only guitads is tagged for releases: `../guitads/dependencies.txt` pins the tads-runner and captainsengine commits that belong to a guitads commit. guitads' configure warns when the checkouts differ (an error with `-DGUITADS_REQUIRE_PINNED_DEPS=ON`, which its CI workflows set), its workflows check out the pinned commits, and `cmake -P ../guitads/cmake/deps.cmake update|checkout|status` records, restores or shows them — see `../guitads/cmake/GuitadsDeps.cmake` and guitads' README.md. So a guitads commit that needs newer tads-runner/captainsengine commits must update `dependencies.txt` (after pushing those), or its CI builds the old ones. `../htmltads` has the same mechanism for tads-runner alone (`../htmltads/dependencies.txt`, `../htmltads/cmake/HtmltadsDeps.cmake`, `-DHTMLTADS_REQUIRE_PINNED_DEPS=ON`, `cmake -P ../htmltads/cmake/deps.cmake ...`); the two are independent copies with distinct names, since both repos are often configured together. Each also sets its own version (`GUITADS_VERSION`/`HTMLTADS_VERSION` in its `CMakeLists.txt`, passed up with `PARENT_SCOPE`), which this repo's CPack setup uses for the `GuiTads-…`/`HtmlTads64-…` zip names; `project(... VERSION)` here only names a tads-runner-only Classic zip.
+
+`htmltads` is an independent git repository with its own restrictive (non-GPL) license and its own [CLAUDE.md](../htmltads/CLAUDE.md) — read that before working on anything under `htmltads/`.
+
+## Testing
+
+Tests live in `tests/` and run against a Glk implementation (Remglk), driven by `regtest.py` (from the [plotex](https://github.com/erkyrath/plotex) project). CI (`.github/workflows/build-and-test.yml`) runs:
+
+```
+./tests/prepare.sh   # downloads regtest.py + builds Remglk into tests/remglk (git-ignored)
+./tests/runtests.sh  # builds glk/ against Remglk, then runs regtest.py against both test games
+```
+
+`runtests.sh` builds the `glk/` directory standalone (`cmake -DGlkLibPath=remglk -S../glk/ -Bbuild/`), producing `tadsr`, then replays `.regtest` transcripts against it:
+- `tests/ditch.gam.regtest` — TADS 2 test game (`ditch.gam`)
+- `tests/ditch3.t3.regtest` — TADS 3 test game (`ditch3.t3`)
+
+To run a single test manually after `prepare.sh`, use `python regtest.py -i <path-to-tadsr> <name>.regtest -t 20` from `tests/`. Only run `prepare.sh`/`runtests.sh` on Linux/WSL (they assume a POSIX shell, `curl`, `tar`, `make`, and `nproc`).
+
+## Architecture
+
+Three main pieces compose the runtime:
+
+- **`tads2/`** — the legacy TADS 2 VM/compiler runtime (`run.c`, `dat.c`, `voc.c`, `execmd.c`, etc.), including OS-abstraction layers under `tads2/msdos/` (Windows) and `tads2/unix/`. Builds static libs `tr32h` (release runner) and `trd32h` (debugger-enabled runner), plus the `maketrx32` tool on Windows.
+- **`tads3/`** — the TADS 3 VM/compiler (`vm*.cpp` = VM runtime, `tc*.cpp` = compiler front end). Produces several executables/libs:
+  - `t3make` — the TADS 3 compiler
+  - `t3res` — resource bundler
+  - `mkchrtab` — character mapping table generator
+  - `t3core` — static lib with the core VM (used by `t3run`)
+  - `t3run` — standalone command-line interpreter
+  - `t3htm` / `t3htm_d` — HTML TADS VM libs (release/debug), only built when `WITH_HTMLTADS` is on
+- **`glk/`** — a Glk binding on top of `tads2`+`tads3` sources, producing the `tadsr` executable (the Glk-based interpreter used for both TADS 2 and TADS 3 games). Expects a compiled Glk library (e.g. Remglk) passed via the `GlkLibPath`/`GlkLibName` cache variables.
+
+Cross-cutting notes:
+- Platform selection is via `WIN32`/`EMSCRIPTEN`/else-Unix branches throughout the CMakeLists files, each pulling in different OS-abstraction (`os*.c`/`osunix*.c`/`oswin*.c`) source sets and compile definitions (`MICROSOFT`/`MSDOS`/`T_WIN32` vs `UNIX`/`OSANSI`/`LINUX_386`).
+- `VM_WITH_NETWORK` (auto-on for Windows, or when libcurl is found elsewhere - on Emscripten/Android that's only guitads' bundled one, added by the top-level `CMakeLists.txt` before `tads3/`) toggles TADS's built-in networking (`vmnet*.cpp`, `osifcnet.cpp`); this pulls in a different builtin-function registration file (`vmbifregn.cpp`/`vmbifregxn.cpp` vs `vmbifreg.cpp`/`vmbifregx.cpp`).
+- `tads_settings` (in `tads3/CMakeLists.txt`) is a shared `INTERFACE` target carrying common include dirs and compile definitions consumed by all `tads3` executables/libs — check it first when tracking down platform-specific defines.
+- `TadsFunctions.cmake` provides helpers used by downstream consumers of this repo (e.g. game projects): `make_t3r`, `make_trx`, `em_package`, `build_game`.
